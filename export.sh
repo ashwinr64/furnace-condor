@@ -10,7 +10,7 @@ if [ "$1" == "local" ]; then
 	export CROSS_COMPILE=/home/savoca/Documents/Linaro/android-toolchain-eabi-4.9/bin/arm-eabi-
 else
 	echo "Remote Build"
-	build=/home/savoca/downloads/furnace/condor/aosp
+	build=/home/savoca/downloads/furnace/condor
 	export CROSS_COMPILE=/home/savoca/storage/toolchains/android-toolchain-eabi-4.9/bin/arm-eabi-
 fi
 kernel="furnace"
