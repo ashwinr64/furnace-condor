@@ -63,8 +63,8 @@ echo "Extracting files..."
 if [ -f arch/arm/boot/"$kerneltype" ]; then
 	cp arch/arm/boot/"$kerneltype" ozip/kernel/
 	rm -rf ozip/system
-	mkdir -p ozip/system/etc
-	cp scripts/furnace/install-recovery-2.sh ozip/system/etc/
+	mkdir -p ozip/system/etc/init.d
+	cp scripts/furnace/01furnace ozip/system/etc/init.d/
 	mkdir -p ozip/system/lib/modules
 	find . -name "*.ko" -exec cp {} ozip/system/lib/modules \;
 	echo "Doing $variant specific module changes!"
