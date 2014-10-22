@@ -711,10 +711,8 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
 static void synaptics_dsx_sensor_state(struct synaptics_rmi4_data *rmi4_data,
 		int state);
 
-#if defined(CONFIG_FB) && !defined(CONFIG_MMI_PANEL_NOTIFICATIONS)
 static int synaptics_dsx_panel_cb(struct notifier_block *nb,
 		unsigned long event, void *data);
-#endif
 
 static int synaptics_rmi4_suspend(struct device *dev);
 
@@ -3319,25 +3317,14 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 
 	init_waitqueue_head(&rmi4_data->wait);
 
-#if defined(CONFIG_MMI_PANEL_NOTIFICATIONS)
-	rmi4_data->panel_nb.suspend = synaptics_rmi4_suspend;
-	rmi4_data->panel_nb.resume = synaptics_rmi4_resume;
-	rmi4_data->panel_nb.dev = &client->dev;
-	if (!mmi_panel_register_notifier(&rmi4_data->panel_nb))
-		pr_info("registered MMI panel notifier\n");
-	else
-		dev_err(&client->dev,
-				"%s: Unable to register MMI notifier\n",
-				__func__);
-#elif defined(CONFIG_FB)
 	rmi4_data->panel_nb.notifier_call = synaptics_dsx_panel_cb;
-	if (!fb_register_client(&rmi4_data->panel_nb))
-		pr_debug("registered FB notifier\n");
+	if (!lcd_register_client(&rmi4_data->panel_nb))
+		pr_debug("registered lcd notifier\n");
 	else
 		dev_err(&client->dev,
-				"%s: Unable to register FB notifier\n",
+				"%s: Unable to register lcd notifier\n",
 				__func__);
-#endif
+
 	mutex_lock(&exp_fn_ctrl_mutex);
 	if (!exp_fn_ctrl.inited) {
 		mutex_init(&exp_fn_ctrl.list_mutex);
@@ -3377,11 +3364,7 @@ err_sysfs:
 				&attrs[attr_count].attr);
 	}
 
-#if defined(CONFIG_MMI_PANEL_NOTIFICATIONS)
-	mmi_panel_unregister_notifier(&rmi4_data->panel_nb);
-#elif defined(CONFIG_FB)
-	fb_unregister_client(&rmi4_data->panel_nb);
-#endif
+	lcd_unregister_client(&rmi4_data->panel_nb);
 
 err_query_device:
 	if (rmi4_data->input_registered) {
@@ -3449,11 +3432,7 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
 		regulator_put(rmi4_data->regulator);
 	}
 
-#if defined(CONFIG_MMI_PANEL_NOTIFICATIONS)
-	mmi_panel_unregister_notifier(&rmi4_data->panel_nb);
-#elif defined(CONFIG_FB)
-	fb_unregister_client(&rmi4_data->panel_nb);
-#endif
+	lcd_unregister_client(&rmi4_data->panel_nb);
 	synaptics_rmi4_cleanup(rmi4_data);
 	kfree(rmi4_data);
 
@@ -3627,27 +3606,35 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 	return;
 }
 
-#if defined(CONFIG_FB) && !defined(CONFIG_MMI_PANEL_NOTIFICATIONS)
 static int synaptics_dsx_panel_cb(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
-	struct fb_event *evdata = data;
-	int *blank;
 	struct synaptics_rmi4_data *rmi4_data =
 		container_of(nb, struct synaptics_rmi4_data, panel_nb);
 
-	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
-		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK) {
-			synaptics_rmi4_resume(&(rmi4_data->input_dev->dev));
-		} else if (*blank == FB_BLANK_POWERDOWN) {
-			synaptics_rmi4_suspend(&(rmi4_data->input_dev->dev));
-		}
+	pr_info("%s: event = %lu\n", __func__, event);
+
+	switch (event) {
+	case LCD_EVENT_ON_START:
+		mutex_lock(&rmi4_data->input_dev->mutex);
+		synaptics_rmi4_resume(&(rmi4_data->input_dev->dev));
+		break;
+	case LCD_EVENT_ON_END:
+		mutex_unlock(&rmi4_data->input_dev->mutex);
+		break;
+	case LCD_EVENT_OFF_START:
+		mutex_lock(&rmi4_data->input_dev->mutex);
+		break;
+	case LCD_EVENT_OFF_END:
+		synaptics_rmi4_suspend(&(rmi4_data->input_dev->dev));
+		mutex_unlock(&rmi4_data->input_dev->mutex);
+		break;
+	default:
+		break;
 	}
 
 	return 0;
 }
-#endif
 
 static void synaptics_dsx_resumeinfo_start(
 		struct synaptics_rmi4_data *rmi4_data)
